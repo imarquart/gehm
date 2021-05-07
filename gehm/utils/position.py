@@ -57,7 +57,7 @@ class position:
             input.shape[-1], self.dim_orig
         )
         if isinstance(input, ndarray):
-            input = torch.tensor(input)
+            input = torch.as_tensor(input)
 
         transform = self.transformation_function(input)
         transform.requires_grad = self.requires_grad

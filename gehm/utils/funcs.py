@@ -1,5 +1,6 @@
 import torch
-
+import numpy as np
+from typing import Union
 
 def rescale_position(input: torch.Tensor) -> torch.Tensor:
     """Rescales vector to range between 0 and 1 based on the last dimension
@@ -21,3 +22,8 @@ def rescale_position(input: torch.Tensor) -> torch.Tensor:
     output[output.isnan()] = 1
     return output
 
+def row_norm(input:Union[torch.Tensor, np.ndarray]) -> Union[torch.Tensor, np.ndarray]:
+
+    rowsums=input.sum(axis=-1, keepdims=True)
+    rowsums[rowsums==0]=1
+    return input/rowsums

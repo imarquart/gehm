@@ -6,7 +6,7 @@ import torch
 from numpy import cos, sin
 
 @pytest.mark.position_embeddings
-def test_circle(create_test_data):
+def test_circle():
 
     expected_output=np.zeros([3,2])
     expected_output[0,:]=[cos(0),sin(0)]
