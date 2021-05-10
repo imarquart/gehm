@@ -1,19 +1,12 @@
-from numpy import ndarray, sin, cos
-from torch import tensor
 from typing import Union, Optional
 import torch
-import numpy
-from torch import int16
-
-from gehm.utils.funcs import rescale_position
+from torch.nn.functional import normalize
 
 
-class position:
-    def __init__(
-        self, dim_orig: int, dim_emb: int, requires_grad: bool, dtype=torch.float64
-    ):
+class Position(torch.nn.Module):
+    def __init__(self, dim_orig: int, dim_emb: int):
         """
-        'Abstract' class for positional embeddings.
+        'Abstract' module for positional embeddings.
 
         Parameters
         ----------
@@ -22,18 +15,12 @@ class position:
             All other dimensions are considered observations/batches.
         dim_emb : int
             Dimension of the embedding space.
-        requires_grad : bool
-            pytorch parameter applied to output
-        dtype : [type], optional
-            pytorch parameter cast onto output
         """
-
         self.dim_orig = dim_orig
         self.dim_emb = dim_emb
-        self.requires_grad = requires_grad
-        self.dtype = dtype
+        super(position, self).__init__()
 
-    def embed(self, input: Union[torch.Tensor, ndarray]) -> torch.Tensor:
+    def forward(self, x):
         """
         Generates embedded position from input
 
@@ -48,46 +35,39 @@ class position:
             Output in embedded space
         """
 
-        if len(input.shape)==1:
-            input=input.reshape([-1,1])
+        if len(x.shape) == 1:
+            x = x.unsqueeze(1)
 
         assert (
-            input.shape[-1] == self.dim_orig
+            x.shape[-1] == self.dim_orig
         ), "Input tensor's dimension is {}, position is initialized with input dimension {}".format(
-            input.shape[-1], self.dim_orig
+            x.shape[-1], self.dim_orig
         )
-        if isinstance(input, ndarray):
-            input = torch.as_tensor(input)
 
-        transform = self.transformation_function(input)
-        transform.requires_grad = self.requires_grad
-        transform = transform.to(self.dtype)
-        return transform
+        return self.transformation_function(x)
 
-    def transformation_function(
-        self, input: Union[torch.Tensor, ndarray]
-    ) -> Union[torch.Tensor, ndarray]:
+    def transformation_function(self, input: torch.Tensor) -> torch.Tensor:
         """
-        Implement this function in your subclass.
-        This example simply cuts the dimensions.
+            Implement this function in your subclass.
+            This example simply cuts the dimensions.
 
-        Parameters
-        ----------
-        input : Union[torch.Tensor, ndarray]
-            input
+            Parameters
+            ----------
+            input : Union[torch.Tensor, ndarray]
+                input
 
-        Returns
-        -------
-        Union[torch.Tensor, ndarray]
-            output
-        """
+            Returns
+            -------
+            Union[torch.Tensor, ndarray]
+                output
+            """
         # Implement transformation here
         transformation = input[..., : self.dim_emb]
         return transformation
 
 
-class circle(position):
-    def __init__(self, requires_grad: bool = True, dtype=torch.float64, max_value:Union[int,float]=1):
+class Circle(Position):
+    def __init__(self, max_value: Union[int, float] = 1):
         """
         Projects degrees onto a circle.
         See transformation_function() for details
@@ -103,15 +83,11 @@ class circle(position):
         """
         self.dim_orig = 1
         self.dim_emb = 2
-        self.max_value=max_value
-        self.requires_grad = requires_grad
-        self.dtype = dtype
+        self.max_value = max_value
 
-        super().__init__(self.dim_orig, self.dim_emb, requires_grad, dtype)
+        super().__init__(self.dim_orig, self.dim_emb)
 
-    def transformation_function(
-        self, input: Union[torch.Tensor, ndarray]
-    ) -> Union[torch.Tensor, ndarray]:
+    def transformation_function(self, input: torch.Tensor) -> torch.Tensor:
         """
         Project positional values in the range [0,self.max_value] into a circle
         in a 2d plane. Input values are understood as degrees, scaled between 0 and self.max_value.
@@ -119,22 +95,22 @@ class circle(position):
 
         Parameters
         ----------
-        input : Union[torch.Tensor, ndarray]
+        input : torch.Tensor
             Input degrees as self.max_value*degree/360. Last dimension must be 1.
 
         Returns
         -------
-        Union[torch.Tensor, ndarray]
+        torch.Tensor
             Output in (x,y) on the unit circle. Last dimension will be 2.
         """
-        input=input/self.max_value
-        y = sin(input * 360)
-        x = cos(input * 360)
+        input = input / self.max_value
+        y = torch.sin(input * 360)
+        x = torch.cos(input * 360)
         return torch.cat([x, y], -1)
 
 
-class disk(position):
-    def __init__(self, requires_grad: bool = True, dtype=torch.float64, max_value=None):
+class Disk(Position):
+    def __init__(self, max_value=None):
         """
         Projects (x,y) coordinates into a disc inside a unit circle.
         See transformation_function() for details
@@ -148,15 +124,13 @@ class disk(position):
         """
         self.dim_orig = 2
         self.dim_emb = 2
-        self.requires_grad = requires_grad
-        self.dtype = dtype
-        self.max_value=max_value
+        if max_value is None:
+            max_value = 1
+        self.max_value = max_value
 
-        super().__init__(self.dim_orig, self.dim_emb, requires_grad, dtype)
+        super().__init__(self.dim_orig, self.dim_emb)
 
-    def transformation_function(
-        self, input: Union[torch.Tensor, ndarray]
-    ) -> Union[torch.Tensor, ndarray]:
+    def transformation_function(self, input: torch.Tensor) -> torch.Tensor:
         """
         Project positional values into the a disk of radius self.max_value
         For example, if max_value is 1, values get projected into the unit disk.
@@ -164,18 +138,22 @@ class disk(position):
 
         Parameters
         ----------
-        input : Union[torch.Tensor, ndarray]
+        input : torch.Tensor
             Input coordinates. Last dimension must be 2.
 
         Returns
         -------
-        Union[torch.Tensor, ndarray]
+        torch.Tensor
             Output in (x,y) on the unit disk. Last dimension will be 2.
         """
 
         # Coordinates outside the unit circle will be normed to length 1
-        inorm=torch.norm(input,dim=-1, keepdim=True,p=2).squeeze()
-        if (inorm>self.max_value).any():
-            input[inorm>1,...]=torch.div(input[inorm>1,...],inorm[inorm>1])*self.max_value
+        inorm = torch.norm(input, dim=-1, keepdim=True, p=2).squeeze()
+        if (inorm > self.max_value).any():
+            #    input[inorm>1,...]=torch.div(input[inorm>1,...],inorm[inorm>1])*self.max_value
+            input[inorm > self.max_value, ...] = (
+                normalize(input[inorm > self.max_value, ...], p=2, dim=-1)
+                * self.max_value
+            )
 
         return input

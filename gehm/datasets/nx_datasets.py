@@ -1,10 +1,10 @@
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 import networkx as nx
 from typing import Union
 import torch
 import numpy as np
 
-from gehm.utils.distances import (
+from gehm.utils.np_distances import (
     nx_second_order_proximity,
     nx_first_order_proximity,
     second_order_proximity,
@@ -19,12 +19,12 @@ class nx_dataset_onelevel(Dataset):
         G: Union[nx.Graph, nx.DiGraph],
         distance_metric: str = "cosine",
         norm_rows: bool = True,
-        proximities:list=[1,2]
+        proximities: list = [1, 2],
     ):
-        
-        if not isinstance(proximities,list):
-            proximities=[proximities]
-        self.proximities=proximities
+
+        if not isinstance(proximities, list):
+            proximities = [proximities]
+        self.proximities = proximities
         self.nodes = np.array(list(G.nodes))
 
         # Derive node similarities in whole graph
@@ -40,10 +40,18 @@ class nx_dataset_onelevel(Dataset):
             )
         else:
             self.sim1 = None
-        
+
         if 2 in proximities:
             if self.sim1 is None:
-                self.sim2 = nx_second_order_proximity(G=G,node_ids=self.nodes,whole_graph_proximity=True, to_batch=False, distance_metric=distance_metric, norm_rows_in_sample=False, norm_rows=norm_rows)
+                self.sim2 = nx_second_order_proximity(
+                    G=G,
+                    node_ids=self.nodes,
+                    whole_graph_proximity=True,
+                    to_batch=False,
+                    distance_metric=distance_metric,
+                    norm_rows_in_sample=False,
+                    norm_rows=norm_rows,
+                )
             else:
                 self.sim2 = second_order_proximity(
                     self.sim1,
@@ -54,9 +62,7 @@ class nx_dataset_onelevel(Dataset):
                     norm_rows=norm_rows,
                 )
         else:
-            self.sim2 = None 
-        
-
+            self.sim2 = None
 
     def __len__(self):
         return len(self.nodes)
@@ -70,8 +76,8 @@ class nx_dataset_onelevel(Dataset):
             similarity1 = 0
         if 2 in self.proximities:
             similarity2 = self.sim2[idx, :]
-        else: 
+        else:
             similarity2 = 0
 
-        return node, similarity1,similarity2
+        return node, similarity1, similarity2
 

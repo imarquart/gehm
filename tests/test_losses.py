@@ -5,42 +5,46 @@ import pytest
 import numpy as np
 import torch
 
+
 @pytest.mark.losses
 def test_first_deg_loss(create_test_data):
 
-    G,G_undir= create_test_data
+    G, G_undir = create_test_data
 
+    dataset = nx_dataset_onelevel(G)
+    first_deg_loss = FirstDegLoss()
 
-    dataset=nx_dataset_onelevel(G)
+    nodes, sim1, sim2 = dataset[0:6]
 
-    nodes,sim1,sim2=dataset[0:6]
-
-    positions=torch.as_tensor(np.random.rand(sim1.shape[0],2))
+    positions = torch.as_tensor(np.random.rand(sim1.shape[0], 2))
 
     # Test size exception
     with pytest.raises(ValueError):
-        first_deg_loss(sim1,positions[0:positions.shape[0]-2,:])
+        first_deg_loss(positions[0 : positions.shape[0] - 2, :], sim1)
 
-    positions=torch.as_tensor(np.ones([sim1.shape[0],2]))
-    assert (first_deg_loss(sim1,positions)<0), "Neg loss should be <0, is {}".format(first_deg_loss(sim1,positions))
-    
+    positions = torch.as_tensor(np.ones([sim1.shape[0], 2]))
+    assert first_deg_loss(positions, sim1) < 0, "Neg loss should be <0, is {}".format(
+        first_deg_loss(sim1, positions)
+    )
+
+
 @pytest.mark.losses
 def test_second_deg_loss(create_test_data):
 
-    G,G_undir= create_test_data
+    G, G_undir = create_test_data
 
+    dataset = nx_dataset_onelevel(G)
+    second_deg_loss = SecondDegLoss()
+    nodes, sim1, sim2 = dataset[0:6]
 
-    dataset=nx_dataset_onelevel(G)
-
-    nodes,sim1,sim2=dataset[0:6]
-
-    positions=torch.as_tensor(np.random.rand(sim1.shape[0],2))
+    positions = torch.as_tensor(np.random.rand(sim1.shape[0], 2))
 
     # Test size exception
     with pytest.raises(ValueError):
-        second_deg_loss(sim1,positions[0:positions.shape[0]-2,:])
+        second_deg_loss(positions[0 : positions.shape[0] - 2, :], sim1)
 
-    positions=torch.as_tensor(np.ones([sim1.shape[0],2]))
-    assert (second_deg_loss(sim1,positions)<0), "Neg loss should be <0, is {}".format(second_deg_loss(sim1,positions))
-
+    positions = torch.as_tensor(np.ones([sim1.shape[0], 2]))
+    assert second_deg_loss(positions, sim1) < 0, "Neg loss should be <0, is {}".format(
+        second_deg_loss(sim1, positions)
+    )
 
