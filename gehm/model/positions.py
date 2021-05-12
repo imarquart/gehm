@@ -16,9 +16,10 @@ class Position(torch.nn.Module):
         dim_emb : int
             Dimension of the embedding space.
         """
+        super(Position, self).__init__()
         self.dim_orig = dim_orig
         self.dim_emb = dim_emb
-        super(position, self).__init__()
+        
 
     def forward(self, x):
         """
@@ -62,8 +63,8 @@ class Position(torch.nn.Module):
                 output
             """
         # Implement transformation here
-        transformation = input[..., : self.dim_emb]
-        return transformation
+        transformation = input.clone()
+        return transformation[..., : self.dim_emb]
 
 
 class Circle(Position):
@@ -81,11 +82,12 @@ class Circle(Position):
         max_value : Union[int,float], optional
             The maximum value of each input element - used for rescaling
         """
+        
         self.dim_orig = 1
         self.dim_emb = 2
         self.max_value = max_value
-
-        super().__init__(self.dim_orig, self.dim_emb)
+        super(Circle, self).__init__(self.dim_orig, self.dim_emb)
+        
 
     def transformation_function(self, input: torch.Tensor) -> torch.Tensor:
         """
@@ -122,13 +124,14 @@ class Disk(Position):
         dtype : [type], optional
             by default torch.float64
         """
+        
         self.dim_orig = 2
         self.dim_emb = 2
         if max_value is None:
             max_value = 1
         self.max_value = max_value
-
-        super().__init__(self.dim_orig, self.dim_emb)
+        super(Disk, self).__init__(self.dim_orig, self.dim_emb)
+        
 
     def transformation_function(self, input: torch.Tensor) -> torch.Tensor:
         """
@@ -148,12 +151,63 @@ class Disk(Position):
         """
 
         # Coordinates outside the unit circle will be normed to length 1
+        output=input.clone()
         inorm = torch.norm(input, dim=-1, keepdim=True, p=2).squeeze()
         if (inorm > self.max_value).any():
-            #    input[inorm>1,...]=torch.div(input[inorm>1,...],inorm[inorm>1])*self.max_value
-            input[inorm > self.max_value, ...] = (
-                normalize(input[inorm > self.max_value, ...], p=2, dim=-1)
+            output[...,inorm > self.max_value,:] = (
+                normalize(output[...,inorm > self.max_value,:], p=2, dim=-1)
                 * self.max_value
             )
 
-        return input
+        return output
+
+
+
+
+class Disk2(Position):
+    def __init__(self, max_value=None):
+        """
+        Projects (x,y) coordinates into a disc inside a unit circle.
+        See transformation_function() for details
+
+        Parameters
+        ----------
+        requires_grad : bool, optional
+            by default True
+        dtype : [type], optional
+            by default torch.float64
+        """
+        
+        self.dim_orig = 2
+        self.dim_emb = 2
+        if max_value is None:
+            max_value = 1
+        self.max_value = max_value
+        super(Disk2, self).__init__(self.dim_orig, self.dim_emb)
+        
+
+    def transformation_function(self, input: torch.Tensor) -> torch.Tensor:
+        """
+        Project positional values into the a disk of radius self.max_value
+        For example, if max_value is 1, values get projected into the unit disk.
+        Here, for coordinates z with ||z||>1, the coordinate are set to the unit circle z/||z||
+
+        Parameters
+        ----------
+        input : torch.Tensor
+            Input coordinates. Last dimension must be 2.
+
+        Returns
+        -------
+        torch.Tensor
+            Output in (x,y) on the unit disk. Last dimension will be 2.
+        """
+
+        # Coordinates outside the unit circle will be normed to length 1
+        output=input.clone()
+        inorm = torch.norm(input, dim=-1, keepdim=True, p=2).squeeze()
+        maxnorm= torch.max(inorm)#*(1+inorm.mean()/torch.max(inorm))
+        #maxnorm= torch.max(inorm)*(1+inorm/torch.max(inorm))
+        output=output/maxnorm.unsqueeze(-1)
+
+        return output

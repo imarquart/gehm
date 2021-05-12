@@ -30,12 +30,11 @@ def embedding_first_order_proximity(
 
     assert isinstance(positions, Tensor)
 
-    similarity_matrix = 1 - cdist(positions, positions, p=2)
+    similarity_matrix = cdist(positions, positions, p=2)
     if norm_rows:
         similarity_matrix = row_norm(similarity_matrix)
-    similarity_matrix.requires_grad = positions.requires_grad
-
-    return similarity_matrix
+    similarity_matrix = 1-similarity_matrix
+    return similarity_matrix-torch.eye(similarity_matrix.shape[0])
 
 
 def embedding_second_order_proximity(
@@ -57,14 +56,11 @@ def embedding_second_order_proximity(
     Tensor
         Similarity Matrix
     """
-    similarity_matrix = embedding_first_order_proximity(positions, norm_rows=False)
+    similarity_matrix = embedding_first_order_proximity(positions, norm_rows=norm_rows)
     similarity_matrix = matrix_cosine(similarity_matrix)
 
     if norm_rows:
         similarity_matrix = row_norm(similarity_matrix)
-
-    similarity_matrix.requires_grad = positions.requires_grad
-
     return similarity_matrix
 
 
