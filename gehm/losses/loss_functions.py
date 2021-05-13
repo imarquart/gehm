@@ -1,4 +1,4 @@
-from gehm.utils.distances import (
+from gehm.model.distances import (
     embedding_first_order_proximity,
     embedding_second_order_proximity,
 )
@@ -11,7 +11,7 @@ from torch.nn import KLDivLoss
 
 
 class WeightedLoss(torch.nn.Module):
-    def __init__(self, embedding_weight:float, first_deg_weight: float, beta: Union[float, int]=2, norm_rows: bool = True):
+    def __init__(self, embedding_weight:float, first_deg_weight: float, beta: Union[float, int]=2, norm_rows: bool = True, device: str = "cpu"):
         """Loss function weighting KL divergence for both first-degree proximity and second-degree proximity
 
         Parameters
@@ -25,12 +25,12 @@ class WeightedLoss(torch.nn.Module):
             Set larger than 1 to give higher weights to similarity ties that exist, by default 2
         """
         super(WeightedLoss, self).__init__()
-        self.weight=first_deg_weight
-        self.emb=embedding_weight
-        self.firstdegloss=FirstDegLoss(norm_rows, beta=1)
-        self.seconddegloss=SecondDegLoss(norm_rows, beta=1)
-        self.firstdegencloss=FirstDegLossEncoder(norm_rows, beta)
-        self.mindloss=MinDistLoss()
+        self.weight=torch.tensor(first_deg_weight).to(device)
+        self.emb=torch.tensor(embedding_weight).to(device)
+        self.firstdegloss=FirstDegLoss(norm_rows, beta=1, device=device)
+        self.seconddegloss=SecondDegLoss(norm_rows, beta=1, device=device)
+        self.firstdegencloss=FirstDegLossEncoder(norm_rows, beta, device=device)
+        self.mindloss=MinDistLoss(device=device)
         
 
     def forward(self, similarity: torch.Tensor, similarity2: torch.Tensor,positions: torch.Tensor, est_similarity: torch.Tensor = None)->torch.Tensor:
@@ -61,7 +61,7 @@ class WeightedLoss(torch.nn.Module):
 
 
 class MinDistLoss(torch.nn.Module):
-    def __init__(self, norm_rows: bool = True, min_distance:float=0.1):
+    def __init__(self, norm_rows: bool = True, min_distance:float=0.1, device: str = "cpu"):
         """
         First order proximity KL Divergence between similarity matrix and embedded positions.
     Includes beta parameter to emphasize non-zero elements in similarity matrix.
@@ -75,8 +75,8 @@ class MinDistLoss(torch.nn.Module):
             Set larger than 1 to give higher weights to similarity ties that exist, by default 2
         """
         super(MinDistLoss, self).__init__()
-        self.norm_rows = norm_rows
-        self.min_distance = min_distance
+        self.norm_rows = torch.tensor(norm_rows).to(device)
+        self.min_distance = torch.tensor(min_distance).to(device)
         
 
     def forward(self, positions):
@@ -110,7 +110,7 @@ class MinDistLoss(torch.nn.Module):
 
 
 class FirstDegLoss(torch.nn.Module):
-    def __init__(self, norm_rows: bool = True, beta: Union[float, int] = 2):
+    def __init__(self, norm_rows: bool = True, beta: Union[float, int] = 2, device: str = "cpu"):
         """
         First order proximity KL Divergence between similarity matrix and embedded positions.
     Includes beta parameter to emphasize non-zero elements in similarity matrix.
@@ -124,8 +124,8 @@ class FirstDegLoss(torch.nn.Module):
             Set larger than 1 to give higher weights to similarity ties that exist, by default 2
         """
         super(FirstDegLoss, self).__init__()
-        self.norm_rows = norm_rows
-        self.beta = beta
+        self.norm_rows = torch.tensor(norm_rows).to(device)
+        self.beta = torch.tensor(beta).to(device)
         
 
     def forward(self, positions, similarity):
@@ -155,7 +155,7 @@ class FirstDegLoss(torch.nn.Module):
 
         embedding_similarity = embedding_first_order_proximity(
             positions=positions, norm_rows=self.norm_rows
-        )
+        ).to(similarity.device)
 
         if not embedding_similarity.shape == similarity.shape:
             msg = "Loss function size mismatch. After embedding calculations, original similarities: {}, Embedded similarities {}".format(
@@ -165,63 +165,18 @@ class FirstDegLoss(torch.nn.Module):
             raise ValueError(msg)
 
         zero_mask_sim = similarity == 0
-        weights = torch.ones(zero_mask_sim.shape) * self.beta
+        weights = torch.ones(zero_mask_sim.shape).to(similarity.device) * self.beta
         weights[zero_mask_sim] = 1
 
-        loss = torch.norm((embedding_similarity-similarity)*weights,p=2,dim=-1).mean()/self.beta
+
+        loss = torch.norm((embedding_similarity-similarity)*weights,p=2,dim=-1).to(similarity.device).mean()/self.beta
 
         return loss
 
-
-class FirstDegLossEncoder(torch.nn.Module):
-    def __init__(self, norm_rows: bool = True, beta: Union[float, int] = 2):
-        """
-        First order proximity KL Divergence between similarity matrix and embedded positions.
-    Includes beta parameter to emphasize non-zero elements in similarity matrix.
-
-        Parameters
-        ----------
-        norm_rows : bool, optional
-            Whether to norm rows of embedded proximities to 1, by default True
-        beta : Union[float,int], optional
-            Weight given to non-zero elements in similarity matrix
-            Set larger than 1 to give higher weights to similarity ties that exist, by default 2
-        """
-        super(FirstDegLossEncoder, self).__init__()
-        self.norm_rows = norm_rows
-        self.beta = beta
-        
-
-    def forward(self, est_similarity, similarity):
-        """
-        First order proximity KL Divergence between similarity matrix and embedded positions.
-        Includes beta parameter to emphasize non-zero elements in similarity matrix.
-
-        Parameters
-        ----------
-        similarity : Tensor
-            Similarity matrix of dimension NxN
-        positions : Tensor
-            Positions of dimension NxE where E is dimension of embedded space
-
-        Returns
-        -------
-        Tensor
-            batch-mean KL Divergence
-
-        """
-
-        zero_mask_sim = similarity == 0
-        weights = torch.ones(zero_mask_sim.shape) * self.beta
-        weights[zero_mask_sim] = 1
-
-        loss = torch.norm((est_similarity-similarity)*weights,p=2,dim=-1).mean()/self.beta
-
-        return loss
 
 
 class SecondDegLoss(torch.nn.Module):
-    def __init__(self, norm_rows: bool = True, beta: Union[float, int] = 2):
+    def __init__(self, norm_rows: bool = True, beta: Union[float, int] = 2, device: str = "cpu"):
         """
         First order proximity KL Divergence between similarity matrix and embedded positions.
         Includes beta parameter to emphasize non-zero elements in similarity matrix.
@@ -235,8 +190,8 @@ class SecondDegLoss(torch.nn.Module):
             Set larger than 1 to give higher weights to similarity ties that exist, by default 2
         """
         super(SecondDegLoss, self).__init__()
-        self.norm_rows = norm_rows
-        self.beta = beta
+        self.norm_rows = torch.tensor(norm_rows).to(device)
+        self.beta = torch.tensor(beta).to(device)
         
 
     def forward(self, positions, similarity):
@@ -276,7 +231,7 @@ class SecondDegLoss(torch.nn.Module):
             raise ValueError(msg)
 
         zero_mask = similarity == 0
-        weights = torch.ones(zero_mask.shape) * self.beta
+        weights = torch.ones(zero_mask.shape).to(self.beta.device) * self.beta
         weights[zero_mask] = 1
 
         return torch.norm((embedding_similarity-similarity)*weights,p=2,dim=-1).mean()/self.beta

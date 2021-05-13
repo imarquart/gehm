@@ -111,6 +111,8 @@ class Circle(Position):
         return torch.cat([x, y], -1)
 
 
+
+
 class Disk(Position):
     def __init__(self, max_value=None):
         """
@@ -211,3 +213,40 @@ class Disk2(Position):
         output=output/maxnorm.unsqueeze(-1)
 
         return output
+
+
+
+class SDNEPosition(Position):
+    def __init__(self, dimension: int = 1):
+        """
+        Passes through embedded values without change.
+
+        Parameters
+        ----------
+        requires_grad : bool, optional
+            by default True
+        dtype : [type], optional
+            by default torch.float64
+        max_value : Union[int,float], optional
+            The maximum value of each input element - used for rescaling
+        """
+        
+        self.dim_orig = torch.tensor(dimension)
+        self.dim_emb = torch.tensor(dimension)
+        super(SDNEPosition, self).__init__(self.dim_orig, self.dim_emb)
+        
+
+    def transformation_function(self, input: torch.Tensor) -> torch.Tensor:
+        """
+        Passthrough
+
+        Parameters
+        ----------
+        input : torch.Tensor
+
+        Returns
+        -------
+        torch.Tensor
+            
+        """
+        return input

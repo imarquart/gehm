@@ -21,6 +21,19 @@ from gehm.model.gehm import OneLevelGehm,OneLevelGehm2
 from tqdm import tqdm
 
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+nr_epochs = 500
+step_size=50 
+gamma=0.99
+lr=0.0001
+amsgrad=True
+embedding_weight=0
+first_deg_weight=1
+beta=2
+shuffle=True
+
+
 np.random.seed(1)
 torch.manual_seed(1)
 torch.cuda.manual_seed(1)
@@ -47,20 +60,21 @@ decoderlosses=[]
 lr_list=[]
 
 nr_nodes = len(G.nodes)
-nr_epochs = 50000
+
 batch_size = nr_nodes
 dataset = nx_dataset_onelevel(G)
-loss_fn = WeightedLoss(embedding_weight=0.8,first_deg_weight=0.5, beta=1)
-dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+loss_fn = WeightedLoss(embedding_weight=embedding_weight,first_deg_weight=first_deg_weight, beta=beta, device=device)
+dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
 gehm = OneLevelGehm2(batch_size, nr_nodes, Disk2, torch.nn.Tanh,nr_transformers=6,nr_heads=batch_size)
-
+gehm=gehm.to(device)
+loss_fn=loss_fn.to(device)
 #optimizer=torch.optim.SGD(gehm.parameters(), lr=0.0001, momentum=0.99)
 #optimizer = torch.optim.Adam(gehm.parameters(),lr=0.0001,weight_decay=0.00001,amsgrad=True)
-optimizer = torch.optim.Adam(gehm.parameters(),lr=0.0001,amsgrad=True)
+optimizer = torch.optim.Adam(gehm.parameters(),lr=lr,amsgrad=amsgrad)
 #scheduler =torch.optim.lr_scheduler.CyclicLR(optimizer,base_lr=0.0001, max_lr=0.0005,step_size_up=100,mode="exp_range",gamma=0.99)
 desc=""
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
-step_size=50, gamma=0.99)
+step_size=step_size, gamma=gamma)
 epoch_loss=torch.tensor(0)
 for epoch in range(0, nr_epochs):
     gehm.train()
@@ -68,10 +82,10 @@ for epoch in range(0, nr_epochs):
     pbar = tqdm(enumerate(dataloader),desc=desc, position=0, leave=False)
     start_time = time.time()
     if epoch_loss > 0:
-        losses.append(epoch_loss.detach().numpy())
-        firstlosses.append(firstloss.detach().numpy())
-        secondlosses.append(secondloss.detach().numpy())
-        decoderlosses.append(decoderloss.detach().numpy())
+        losses.append(epoch_loss.cpu().detach().numpy())
+        firstlosses.append(firstloss.cpu().detach().numpy())
+        secondlosses.append(secondloss.cpu().detach().numpy())
+        decoderlosses.append(decoderloss.cpu().detach().numpy())
     epoch_loss=0
     firstloss=0
     secondloss=0
@@ -82,11 +96,14 @@ for epoch in range(0, nr_epochs):
         optimizer.zero_grad()
 
         node_ids, sim1, sim2 = data
+       
         # This needs collate fn
         #index = torch.sort(node_ids)[0].long()
         #sim1 = sim1[:, index]
         #sim2 = sim2[:, index]
         if torch.norm(sim1) > 0:
+            sim1= sim1.to(device)
+            sim2= sim2.to(device)
             positions,est_sim = gehm(sim1)
             kl_loss, firstloss,secondloss,decoderloss = loss_fn(similarity=sim1,similarity2=sim2, positions=positions, est_similarity=est_sim)
             kl_loss.backward()
@@ -104,18 +121,20 @@ for epoch in range(0, nr_epochs):
 import pandas as pd
 import matplotlib.pyplot as plt
 lr_list=pd.DataFrame(np.array(lr_list)[1:])
-lr_list.plot()
+lr_list.plot(title="Learning Rate")
 losses=pd.DataFrame(np.array(losses)[1:])
-losses.plot()
+losses.plot(title="Total Loss")
 firstlosses=pd.DataFrame(np.array(firstlosses)[1:])
 secondlosses=pd.DataFrame(np.array(secondlosses)[1:])
 decoderlosses=pd.DataFrame(np.array(decoderlosses)[1:])
-firstlosses.plot()
-secondlosses.plot()
-decoderlosses.plot()
+firstlosses.plot(title="Proximity Embedding Loss")
+secondlosses.plot(title="SE Embedding Loss")
+decoderlosses.plot(title="Decoder Loss")
 arr=[]
 with torch.no_grad():
     gehm.eval()
+    gehm=gehm.to("cpu")
+    loss_fn = WeightedLoss(embedding_weight=embedding_weight,first_deg_weight=first_deg_weight, beta=beta, device="cpu")
     kl_loss=0
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
     for i, data in enumerate(dataloader):
@@ -125,7 +144,8 @@ with torch.no_grad():
         asdf = pd.DataFrame(positions.detach().numpy())
         asdf.index=np.array(list(G.nodes))
         asdf.columns = ["x", "y"]
-        asdf["loss"]=kl_loss.detach().numpy()
+        
+        asdf["loss"]=float(kl_loss.detach().numpy())
         arr.append(asdf)
 
 asdf=pd.concat(arr)

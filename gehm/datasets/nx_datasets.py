@@ -3,7 +3,7 @@ import networkx as nx
 from typing import Union
 import torch
 import numpy as np
-from gehm.utils.distances import matrix_cosine
+from gehm.model.distances import matrix_cosine
 from gehm.utils.funcs import row_norm
 from gehm.utils.np_distances import (
     nx_second_order_proximity,
@@ -106,8 +106,8 @@ class nx_dataset_onelevel(Dataset):
 
         # Create Node labels
         self.node_idx = np.linspace(0,len(self.nodes), len(self.nodes), False, dtype=int)
-        self.node_idx_dict =dict(zip(self.nodes, self.node_idx))
-        self.node_idx=torch.as_tensor(self.node_idx)
+        self.node_idx_dict =dict(zip(self.node_idx,self.nodes))
+        self.node_idx=torch.LongTensor(self.node_idx)
 
         # Derive node similarities in whole graph
 
@@ -131,7 +131,7 @@ class nx_dataset_onelevel(Dataset):
 
     def __getitem__(self, idx):
 
-        node = self.node_idx[idx].int()
+        node = self.node_idx[idx]
         similarity1 = self.sim1[idx, :].float()
         similarity2 = self.sim2[idx, :].float()
 
