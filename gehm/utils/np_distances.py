@@ -100,7 +100,6 @@ def nx_first_order_proximity(
     node_ids: Union[Tensor, ndarray, list],
     whole_graph_proximity: bool = True,
     to_batch: bool = False,
-    distance_metric: str = "cosine",
     norm_rows_in_sample: bool = False,
     norm_rows: bool = True,
 ) -> Tensor:
@@ -128,9 +127,6 @@ def nx_first_order_proximity(
     to_batch : bool, optional
         If true, will remove the row entries of nodes not in node_list
         If norm_rows is True, will also re-norm the rows, by default True
-    distance_metric : str, optional
-        Any distance metric from scipy.spatial.distance that works
-        without parameter, by default 'cosine'
     norm_rows_in_sample : bool, optional
         If True, distances are scaled such that the highest distance is 1.
         This implies that distances depend on the sample provided, by default False

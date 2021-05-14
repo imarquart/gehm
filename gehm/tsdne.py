@@ -3,11 +3,13 @@ import os
 from gehm.model.positions import Disk2
 
 #os.chdir("../")
-
+import pandas as pd
+import matplotlib.pyplot as plt
+import scipy as sp
 from gehm.datasets.nx_datasets import *
 from gehm.utils.config import process_config
 from gehm.utils.file_helpers import check_create_folder
-from gehm.agents.sdne import SDNEAgent
+from gehm.agents.sdne import SDNEAgent,tSDNEAgent
 
 def create_test_data():
     G_undir = nx.karate_club_graph()
@@ -29,7 +31,7 @@ se_losses = []
 pr_losses = []
 total_losses = []
 lr_list = []
-config_file = check_create_folder("configs/sdne.json")
+config_file = check_create_folder("configs/tsdne.json")
 config = process_config(config_file)
 
 # Create the Agent and pass all the configuration to it then run it..
@@ -38,12 +40,10 @@ agent = agent_class(config, G)
 
 agent.train()
 
-import pandas as pd
-import matplotlib.pyplot as plt
-import scipy as sp
+
 lr_list = pd.DataFrame(np.array(agent.lr_list)[1:])
-lr_list.plot(title="Learning Rate")
-plt.show()
+#lr_list.plot(title="Learning Rate")
+#plt.show()
 for l in agent.losses_dict.keys():
     losses = pd.DataFrame(np.array(agent.losses_dict[l])[1:])
     losses.plot(title=l)

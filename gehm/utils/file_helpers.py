@@ -41,7 +41,7 @@ def check_create_folder(folders,create_folder=True):
                 if create_folder:
                     try:
                         logging.getLogger("Dirs Creator").info("Folder {} does not exist. Creating folder.".format(db_folder))
-                        mkdir(db_folder)
+                        Path(db_folder).mkdir(parents=True)
                     except:
                         msg="Could not create folder {}".format(db_folder)
                         logging.getLogger("Dirs Creator").error(msg)
