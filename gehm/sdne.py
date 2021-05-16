@@ -51,6 +51,9 @@ for l in agent.losses_dict.keys():
 
 agent.measure()
 print(agent.measures)
+print(agent.measures["rec_map"])
+print(agent.measures["emb_map"])
+print(agent.measures["rec_l2"])
 
 
 
@@ -60,6 +63,10 @@ similarities_cut=similarities
 similarities_cut[similarities_cut<=0.1]=0
 G_est=nx.from_numpy_array(similarities_cut)
 G_norm=nx.from_numpy_array(agent.dataset.sim1.numpy())
+
+aa=((torch.tensor(similarities)-torch.min(torch.tensor(similarities),dim=0, keepdims=True)[0])/(torch.max(torch.tensor(similarities),dim=0, keepdims=True)[0]-torch.min(torch.tensor(similarities),dim=0, keepdims=True)[0])).numpy()
+
+bb=agent.dataset.sim1.numpy()
 
 pr=pd.Series(nx.pagerank(G))
 pr_est=pd.Series(nx.pagerank(G_est))

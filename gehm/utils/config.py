@@ -24,6 +24,10 @@ def setup_logging(log_dir):
     main_logger = logging.getLogger()
     main_logger.setLevel(logging.INFO)
 
+    # Remove previouus handlers
+    while main_logger.hasHandlers():
+        main_logger.removeHandler(main_logger.handlers[0])
+
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(Formatter(log_console_format))

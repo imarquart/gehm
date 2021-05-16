@@ -22,6 +22,7 @@ class SDNESELoss(torch.nn.Module):
         """
         super(SDNESELoss, self).__init__()
         self.beta = torch.tensor(beta).to(device)
+        self.beta.requires_grad=False
         
 
     def forward(self, est_similarity, similarity):
@@ -48,6 +49,7 @@ class SDNESELoss(torch.nn.Module):
         zero_mask_sim = similarity == 0
         weights = torch.ones(zero_mask_sim.shape).to(self.beta.device) * self.beta
         weights[zero_mask_sim] = 1
+        weights.requires_grad=False
 
         loss = torch.norm((est_similarity-similarity)*weights,p=2,dim=-1).mean()
 
@@ -91,7 +93,6 @@ class SDNEProximityLoss(torch.nn.Module):
 
         distances=sdne_prox_distance(positions)
         cut_sim=similarity[:,indecies] # Creates a new tensor
-
         loss = torch.mul(distances,cut_sim).sum().to(positions.device)
 
         return loss

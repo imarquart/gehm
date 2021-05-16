@@ -99,6 +99,10 @@ class SDNEAgent(BaseAgent):
         self.lr_list = []
         self.measures={}
 
+        # Results
+        self.positions=None
+        self.est_similarity=None
+
         if self.cuda:
             torch.cuda.manual_seed_all(self.manual_seed)
             torch.cuda.manual_seed(self.manual_seed)
@@ -181,7 +185,7 @@ class SDNEAgent(BaseAgent):
         position_list=[]
         similarity_list=[]
         with torch.no_grad():
-            pbar = tqdm(enumerate(self.predict_dataloader), desc="Predicting sample", position=0, leave=False)
+            pbar = tqdm(enumerate(self.dataloader), desc="Predicting sample", position=0, leave=False)
             for i, data in pbar:
                 node_ids, sim1, sim2 = data
                 node_ids = node_ids.to(self.device)
@@ -300,20 +304,45 @@ class SDNEAgent(BaseAgent):
         predictions,losses = self.predict()
         nodes,positions,similarities=predictions
 
-        pagerank_overlap, pagerank_l2, reconstruction_l2, mean_se_cosine, mean_se_l2 = aggregate_measures(positions=positions, est_similarities=similarities, similarities=self.dataset.sim1)
+        self.measures = aggregate_measures(positions=positions, est_similarities=similarities, similarities=self.dataset.sim1)
 
-        self.measures["pagerank_overlap"]=pagerank_overlap
-        self.measures["pagerank_l2"]=pagerank_l2
-        self.measures["reconstruction_l2"]=reconstruction_l2
-        self.measures["mean_se_cosine"]=mean_se_cosine
-        self.measures["mean_se_l2"]=mean_se_l2
+
 
     def finalize(self):
         """
-        Finalizes all the operations of the 2 Main classes of the process, the operator and the data loader
+        Finalizes positional embedding by normalizing, reapplying position function and re-measuring deviations.
         :return:
         """
-        pass
+        similarity=self.dataset.sim1.numpy()
+        if self.est_similarity is not None and self.positions is not None:
+            est_similarity=np.array(self.est_similarity)
+            positions=np.array(self.positions)
+        else:
+            predictions,losses = self.predict()
+            nodes,positions,est_similarity=predictions
+            positions=np.array(positions) # just making sure
+            est_similarity=np.array(est_similarity)
+
+        measure_dict_old=aggregate_measures(positions,est_similarity,similarity)
+
+        logging.info("Normalizing positions, re-applying measures")
+
+        positions=(positions - np.mean(positions, axis=0)) / np.std(positions, axis=0)
+
+        positions=self.model.position(positions)
+
+        measure_dict_new=aggregate_measures(positions,est_similarity,similarity)
+
+        logging.info("Applied embedding position. Measures as follows:")
+        logging.info("emb_map - Old: {}, New: {}".format(measure_dict_old["emb_map"], measure_dict_new["emb_map"]))
+        logging.info("emb_l2 - Old: {}, New: {}".format(measure_dict_old["emb_l2"], measure_dict_new["emb_l2"]))
+        logging.info("emb_5precision - Old: {}, New: {}".format(measure_dict_old["emb_5precision"], measure_dict_new["emb_5precision"]))
+
+
+        self.positions=positions
+
+
+        return positions
 
 
 

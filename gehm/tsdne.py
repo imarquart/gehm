@@ -10,6 +10,8 @@ from gehm.datasets.nx_datasets import *
 from gehm.utils.config import process_config
 from gehm.utils.file_helpers import check_create_folder
 from gehm.agents.sdne import SDNEAgent,tSDNEAgent
+from gehm.utils.measurements import aggregate_measures
+
 
 def create_test_data():
     G_undir = nx.karate_club_graph()
@@ -51,11 +53,15 @@ for l in agent.losses_dict.keys():
 
 agent.measure()
 print(agent.measures)
-
+print(agent.measures["rec_map"])
+print(agent.measures["emb_map"])
+print(agent.measures["rec_l2"])
 
 
 predictions,losses = agent.predict()
 nodes,positions,similarities=predictions
+
+
 similarities_cut=similarities
 similarities_cut[similarities_cut<=0.1]=0
 G_est=nx.from_numpy_array(similarities_cut)
@@ -67,11 +73,17 @@ s1=np.argsort(pr)
 s2=np.argsort(pr_est)
 pageranks=pd.DataFrame([pr,pr_est]).T
 pageranks=pd.DataFrame([s1,s2]).T
-diff=sp.spatial.distance.norm(similarities-agent.dataset.sim1.numpy())
-sp.spatial.distance.cdist(similarities,agent.dataset.sim1.numpy()).mean()
+
+
+sim1=agent.dataset.sim1.numpy()
+pos_distance=torch.cdist(torch.tensor(positions),torch.tensor(positions))
+pos_distance=row_norm(pos_distance).type(torch.DoubleTensor).numpy()
+# SE Distance
+se_distance=torch.cdist(torch.tensor(sim1),torch.tensor(sim1))
+se_distance=row_norm(se_distance).type(torch.DoubleTensor)
+
 
 asdf=pd.DataFrame(positions, index=nodes, columns=["x","y"])
-
 asdf=(asdf - np.mean(asdf)) / np.std(asdf)
 d2=Disk2()
 d2pos=d2(torch.tensor(asdf.to_numpy())).numpy()
