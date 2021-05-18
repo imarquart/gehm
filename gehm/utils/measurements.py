@@ -50,26 +50,26 @@ def aggregate_measures(positions:Union[torch.Tensor, np.ndarray], est_similariti
     pr_sort_est=np.argsort(pr_est_vals)
 
     measure_dict["rec_pagerank_overlap"]=sum(pr_sort==pr_sort_est)
-    measure_dict["rec_pagerank_l2"]=torch.norm(torch.tensor(pr_vals)-torch.tensor(pr_est_vals)).numpy() # Use torch here for consistency with the loss measures
+    measure_dict["rec_pagerank_l2"]=torch.norm(torch.as_tensor(pr_vals)-torch.as_tensor(pr_est_vals)).numpy() # Use torch here for consistency with the loss measures
 
     # Reconstruction
-    measure_dict["rec_l2"]=float(torch.norm(torch.tensor(est_similarities)-torch.tensor(similarities)).numpy())
+    measure_dict["rec_l2"]=float(torch.norm(torch.as_tensor(est_similarities)-torch.as_tensor(similarities)).numpy())
 
     ##### Embedding Space
 
     # Distances in embedding space
-    pos_distance=torch.cdist(torch.tensor(positions),torch.tensor(positions))
+    pos_distance=torch.cdist(torch.as_tensor(positions),torch.as_tensor(positions))
     pos_distance=row_norm(pos_distance).type(torch.DoubleTensor)
 
 
-    measure_dict["emb_l2"]=float(torch.norm(torch.tensor(pos_distance)-torch.tensor(similarities)).numpy())
+    measure_dict["emb_l2"]=float(torch.norm(torch.as_tensor(pos_distance)-torch.as_tensor(similarities)).numpy())
 
     measure_dict["emb_2precision"]=avg_k_precision(similarity=similarities, est_similarity=pos_distance, k=2)
     measure_dict["emb_5precision"]=avg_k_precision(similarity=similarities, est_similarity=pos_distance, k=5)
     measure_dict["emb_map"]=mean_AP(similarity=similarities, est_similarity=pos_distance)
 
     # SE Distance
-    se_distance=torch.cdist(torch.tensor(similarities),torch.tensor(similarities))
+    se_distance=torch.cdist(torch.as_tensor(similarities),torch.as_tensor(similarities))
     se_distance=row_norm(se_distance).type(torch.DoubleTensor)
 
     measure_dict["emb_mean_se_cosine"]=torch.nn.functional.cosine_similarity(pos_distance,se_distance, dim=-1).mean().numpy()

@@ -1,15 +1,11 @@
 import os
 
-
 os.chdir("d:\\Marquart\\Documents\\Python\\gehm\\")
-import pandas as pd
-import matplotlib.pyplot as plt
-import scipy as sp
+
 from gehm.datasets.nx_datasets import *
 from gehm.utils.config import process_config
 from gehm.utils.file_helpers import check_create_folder
-from gehm.agents.tsdne import tSDNEAgent
-from gehm.utils.measurements import aggregate_measures
+from gehm.agents.hsdne import hSDNEAgent
 
 from gehm.model.positions import Disk2
 
@@ -22,30 +18,57 @@ def create_test_data():
     G.add_edge("c", "e", weight=0.7)
     G.add_edge("c", "f", weight=0.9)
     G.add_edge("a", "d", weight=0.3)
+    hierarchy_dict={}
+    hierarchy_dict["a"]={"hierarchy": 0}
+    hierarchy_dict["c"]={"hierarchy": 1}
+    hierarchy_dict["b"]={"hierarchy": 1}
+    hierarchy_dict["d"]={"hierarchy": 0}
+    hierarchy_dict["e"]={"hierarchy": 1}
+    hierarchy_dict["f"]={"hierarchy": 1}
+    nx.set_node_attributes(G, hierarchy_dict)
 
+    count=0
+    hierarchy_dict={}
+    for node in G_undir.nodes():
+        if G_undir.nodes[node]['club']=="Officer" and count <= 10:
+            hierarchy_dict[node]={"hierarchy": 0}
+            count += 1
+        else:
+            hierarchy_dict[node]={"hierarchy": 1}
+
+
+    count=0
+    hierarchy_dict={}
+    for node in G_undir.nodes():
+        if node in [0,33]:
+            hierarchy_dict[node]={"hierarchy": 0}
+            count += 1
+        else:
+            hierarchy_dict[node]={"hierarchy": 1}
+    nx.set_node_attributes(G_undir, hierarchy_dict)
     return G, G_undir
 
 
 G, G_undir = create_test_data()
-#G = G_undir
+G = G_undir
 losses = []
 se_losses = []
 pr_losses = []
 total_losses = []
 lr_list = []
-config_file = check_create_folder("configs/tsdne.json")
+config_file = check_create_folder("configs/hsdne.json")
 config = process_config(config_file)
 
 # Create the Agent and pass all the configuration to it then run it..
 agent_class = globals()[config.agent]
 agent = agent_class(config, G)
 
-agent.dataset[3]
-
 agent.train()
 
-
-lr_list = pd.DataFrame(np.array(agent.lr_list)[1:])
+import pandas as pd
+import matplotlib.pyplot as plt
+import scipy as sp
+#lr_list = pd.DataFrame(np.array(agent.lr_list)[1:])
 #lr_list.plot(title="Learning Rate")
 #plt.show()
 for l in agent.losses_dict.keys():
@@ -60,36 +83,14 @@ print(agent.measures["emb_map"])
 print(agent.measures["rec_l2"])
 
 
+
 predictions,losses = agent.predict()
 nodes,positions,similarities=predictions
-
-
-similarities_cut=similarities
-similarities_cut[similarities_cut<=0.01]=0
-G_est=nx.from_numpy_array(similarities_cut)
-G_norm=nx.from_numpy_array(agent.dataset.sim1.numpy())
-
-pr=pd.Series(nx.pagerank(G))
-pr_est=pd.Series(nx.pagerank(G_est))
-s1=np.argsort(pr)
-s2=np.argsort(pr_est)
-pageranks=pd.DataFrame([pr,pr_est]).T
-pageranks=pd.DataFrame([s1,s2]).T
-
-
-sim1=agent.dataset.sim1.numpy()
-pos_distance=torch.cdist(torch.tensor(positions),torch.tensor(positions))
-pos_distance=row_norm(pos_distance).type(torch.DoubleTensor).numpy()
-# SE Distance
-se_distance=torch.cdist(torch.tensor(sim1),torch.tensor(sim1))
-se_distance=row_norm(se_distance).type(torch.DoubleTensor)
-
-
 asdf=pd.DataFrame(positions, index=nodes, columns=["x","y"])
-asdf=(asdf - np.mean(asdf)) / np.std(asdf)
-d2=Disk2()
-d2pos=d2(torch.tensor(asdf.to_numpy())).numpy()
-asdf=pd.DataFrame(d2pos, index=nodes, columns=["x","y"])
+#asdf=(asdf - np.mean(asdf) / np.std(asdf))
+#positions=agent.finalize()
+#asdf=pd.DataFrame(positions.numpy(), index=nodes, columns=["x","y"])
+
 figure, axes = plt.subplots()
 Drawing_colored_circle = plt.Circle((0, 0), 1, fill=False)
 plt.scatter(asdf.x, asdf.y)
@@ -100,6 +101,11 @@ asdf["drawn"]=0
 for ind in asdf.index:
     row = asdf.loc[ind, :]
     idx = agent.dataset.node_idx_dict[ind]
+    club = G.nodes[idx]['club']
+    if club == "Officer":
+        col = "red"
+    else:
+        col = "blue"
     x=row.x
     y=row.y
     close_x=np.where(np.isclose(asdf.x,x,atol=0.1))[0]
@@ -116,8 +122,8 @@ for ind in asdf.index:
             x=row.x + xp,
             y=row.y + yp,
             s=idx,
-            fontdict=dict(color="black", size=10),
-            bbox=dict(facecolor="blue", alpha=0.1),
+            fontdict=dict(color="black", size=5),
+            bbox=dict(facecolor=col, alpha=0.2),
         )
     asdf.loc[ind, "drawn"]=1
 

@@ -207,10 +207,12 @@ class Disk2(Position):
 
         # Coordinates outside the unit circle will be normed to length 1
         output=input.clone()
-        inorm = torch.norm(input, dim=-1, keepdim=True, p=2).squeeze()
-        maxnorm= torch.max(inorm)#*(1+inorm.mean()/torch.max(inorm))
-        #maxnorm= torch.max(inorm)*(1+inorm/torch.max(inorm))
-        output=output/maxnorm.unsqueeze(-1)
+        if input.shape[0] > 0:
+            inorm = torch.norm(input, dim=-1, keepdim=True, p=2).squeeze()
+            maxnorm= torch.max(inorm)/self.max_value
+            #(1+inorm.mean()/torch.max(inorm))
+            #maxnorm= torch.max(inorm)*(1+inorm/torch.max(inorm))
+            output=output/maxnorm.unsqueeze(-1)
 
         return output
 

@@ -8,9 +8,9 @@ import numpy as np
 import networkx as nx
 
 from gehm.agents.base import BaseAgent
-from gehm.datasets.nx_datasets import nx_dataset_sdne, nx_dataset_tsne
+from gehm.datasets.nx_datasets import nx_dataset_sdne, nx_dataset_tsne,batch_nx_dataset_tsne
 from gehm.losses.sdne_loss_functions import *
-from gehm.model.sdne import SDNEmodel, tSDNEmodel
+from gehm.model.sdne import SDNEmodel
 
 # import your classes here
 
@@ -325,11 +325,11 @@ class SDNEAgent(BaseAgent):
 
         measure_dict_old=aggregate_measures(positions,est_similarity,similarity)
 
-        logging.info("Normalizing positions, re-applying measures")
+        logging.info("Normalizing positions with measure {}, re-applying measures".format(self.model.position))
 
         positions=(positions - np.mean(positions, axis=0)) / np.std(positions, axis=0)
 
-        positions=self.model.position(positions)
+        positions=self.model.position(torch.as_tensor(positions))
 
         measure_dict_new=aggregate_measures(positions,est_similarity,similarity)
 
@@ -343,102 +343,4 @@ class SDNEAgent(BaseAgent):
 
 
         return positions
-
-
-
-class tSDNEAgent(SDNEAgent):
-    def __init__(self, config, G: Union[nx.Graph, nx.DiGraph]):
-        super(tSDNEAgent, self).__init__(config, G)
-
-
-        self.config = config
-
-        # set cuda flag
-        self.is_cuda = torch.cuda.is_available()
-        if self.is_cuda and not self.config.cuda:
-            self.logger.info(
-                "WARNING: You have a CUDA device, so you should probably enable CUDA"
-            )
-
-        self.cuda = self.is_cuda & self.config.cuda
-        if self.cuda:
-            self.device = "cuda"
-        else:
-            self.device = "cpu"
-        # set the manual seed for torch
-        self.manual_seed = self.config.seed
-        np.random.seed(self.manual_seed)
-        torch.manual_seed(self.manual_seed)
-
-        self.nr_nodes = len(G.nodes)
-        self.nr_epochs = config.nr_epochs
-
-        # activation
-        if config.activation == "Tanh":
-            activation = torch.nn.Tanh
-        else:
-            activation = torch.nn.Tanh
-
-        # dataset
-        self.dataset = nx_dataset_tsne(G)
-
-        # define model
-        self.model = tSDNEmodel(
-            dim_input=self.nr_nodes,
-            dim_intermediate=config.dim_intermediate,
-            dim_embedding=config.dim_embedding,
-            activation=activation,
-            nr_encoders=config.nr_encoders,
-            nr_decoders=config.nr_decoders,nr_heads=config.nr_heads, dropout=config.dropout, encoder_activation=config.encoder_activation
-        )
-
-        # define data_loader
-        self.dataloader = DataLoader(
-            self.dataset, batch_size=config.batch_size, shuffle=config.shuffle
-        )
-        self.predict_dataloader = DataLoader(
-            self.dataset, batch_size=config.batch_size, shuffle=False
-        )
-        # define loss
-        self.se_loss = SDNESELoss(beta=config.beta1, device=self.device)
-        self.pr_loss = SDNEProximityLoss(device=self.device)
-
-        # define optimizers for both generator and discriminator
-        self.optimizer = torch.optim.Adam(
-            self.model.parameters(),
-            lr=config.learning_rate,
-            amsgrad=config.amsgrad,
-            weight_decay=config.weight_decay,
-        )
-        self.scheduler = torch.optim.lr_scheduler.StepLR(
-            self.optimizer,
-            step_size=config.schedule_step_size,
-            gamma=config.schedule_gamma,
-        )
-
-        # initialize counter
-        self.current_epoch = 0
-        self.current_iteration = 0
-
-        # dicts
-        self.losses_dict = {}
-        self.lr_list = []
-        self.measures={}
-
-        if self.cuda:
-            torch.cuda.manual_seed_all(self.manual_seed)
-            torch.cuda.manual_seed(self.manual_seed)
-            # torch.cuda.set_device(self.device)
-            self.model = self.model.cuda()
-            self.se_loss = self.se_loss.cuda()
-            self.pr_loss = self.pr_loss.cuda()
-            self.logger.info("Program will run on *****GPU-CUDA***** ")
-        else:
-            self.logger.info("Program will run on *****CPU*****\n")
-
-        # Model Loading from the latest checkpoint if not found start from scratch.
-        # self.load_checkpoint(self.config.checkpoint_file)
-        # Summary Writer
-        # self.summary_writer = None
-
 

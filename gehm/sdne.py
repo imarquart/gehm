@@ -1,13 +1,13 @@
 import os
 
-from gehm.model.positions import Disk2
-
-#os.chdir("../")
+os.chdir("d:\\Marquart\\Documents\\Python\\gehm\\")
 
 from gehm.datasets.nx_datasets import *
 from gehm.utils.config import process_config
 from gehm.utils.file_helpers import check_create_folder
 from gehm.agents.sdne import SDNEAgent
+
+from gehm.model.positions import Disk2
 
 def create_test_data():
     G_undir = nx.karate_club_graph()
@@ -18,12 +18,19 @@ def create_test_data():
     G.add_edge("c", "e", weight=0.7)
     G.add_edge("c", "f", weight=0.9)
     G.add_edge("a", "d", weight=0.3)
-
+    hierarchy_dict={}
+    hierarchy_dict["a"]={"hierarchy": 0}
+    hierarchy_dict["c"]={"hierarchy": 0}
+    hierarchy_dict["b"]={"hierarchy": 1}
+    hierarchy_dict["d"]={"hierarchy": 1}
+    hierarchy_dict["e"]={"hierarchy": 1}
+    hierarchy_dict["f"]={"hierarchy": 1}
+    nx.set_node_attributes(G, hierarchy_dict)
     return G, G_undir
 
 
 G, G_undir = create_test_data()
-G = G_undir
+#G = G_undir
 losses = []
 se_losses = []
 pr_losses = []
@@ -59,30 +66,11 @@ print(agent.measures["rec_l2"])
 
 predictions,losses = agent.predict()
 nodes,positions,similarities=predictions
-similarities_cut=similarities
-similarities_cut[similarities_cut<=0.1]=0
-G_est=nx.from_numpy_array(similarities_cut)
-G_norm=nx.from_numpy_array(agent.dataset.sim1.numpy())
-
-aa=((torch.tensor(similarities)-torch.min(torch.tensor(similarities),dim=0, keepdims=True)[0])/(torch.max(torch.tensor(similarities),dim=0, keepdims=True)[0]-torch.min(torch.tensor(similarities),dim=0, keepdims=True)[0])).numpy()
-
-bb=agent.dataset.sim1.numpy()
-
-pr=pd.Series(nx.pagerank(G))
-pr_est=pd.Series(nx.pagerank(G_est))
-s1=np.argsort(pr)
-s2=np.argsort(pr_est)
-pageranks=pd.DataFrame([pr,pr_est]).T
-pageranks=pd.DataFrame([s1,s2]).T
-diff=sp.spatial.distance.norm(similarities-agent.dataset.sim1.numpy())
-sp.spatial.distance.cdist(similarities,agent.dataset.sim1.numpy()).mean()
-
 asdf=pd.DataFrame(positions, index=nodes, columns=["x","y"])
 
-asdf=(asdf - np.mean(asdf)) / np.std(asdf)
-d2=Disk2()
-d2pos=d2(torch.tensor(asdf.to_numpy())).numpy()
-asdf=pd.DataFrame(d2pos, index=nodes, columns=["x","y"])
+positions=agent.finalize()
+asdf=pd.DataFrame(positions.numpy(), index=nodes, columns=["x","y"])
+
 figure, axes = plt.subplots()
 Drawing_colored_circle = plt.Circle((0, 0), 1, fill=False)
 plt.scatter(asdf.x, asdf.y)

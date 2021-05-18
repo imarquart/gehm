@@ -1,8 +1,11 @@
 import os
 
+print(os.getcwd())
+os.chdir("../")
+print(os.getcwd())
+
 from gehm.model.positions import Disk2
 
-#os.chdir("../")
 import pandas as pd
 import matplotlib.pyplot as plt
 import scipy as sp
@@ -10,7 +13,9 @@ from gehm.datasets.nx_datasets import *
 from gehm.utils.config import process_config
 from gehm.utils.file_helpers import check_create_folder
 from gehm.agents.sdne import SDNEAgent,tSDNEAgent
+from gehm.agents.tsdne import tSDNEAgent
 from gehm.utils.measurements import aggregate_measures
+from torch.utils.data import DataLoader
 
 
 def create_test_data():
@@ -31,8 +36,9 @@ G = G_undir
 sdne_df=[]
 tsdne_df=[]
 
+
 epoch_list=[10,100,1000,2000,5000]
-#epoch_list=list(np.logspace(0.1, 4.2, num=25, dtype=int))
+epoch_list=list(np.logspace(0.1, 3.8, num=35, dtype=int))
 
 
 #epoch_list=list(np.logspace(0.1, 2, num=10, dtype=int))

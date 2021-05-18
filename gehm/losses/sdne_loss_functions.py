@@ -56,7 +56,7 @@ class SDNESELoss(torch.nn.Module):
         return loss
 
 
-class SDNEProximityLoss(torch.nn.Module):
+class oldSDNEProximityLoss(torch.nn.Module):
     def __init__(self, device:str="cpu"):
         """
         First order proximity between similarity matrix and embedded positions.
@@ -94,5 +94,51 @@ class SDNEProximityLoss(torch.nn.Module):
         distances=sdne_prox_distance(positions)
         cut_sim=similarity[:,indecies] # Creates a new tensor
         loss = torch.mul(distances,cut_sim).sum().to(positions.device)
+
+        return loss
+
+
+
+class SDNEProximityLoss(torch.nn.Module):
+    def __init__(self, device:str="cpu"):
+        """
+        First order proximity between similarity matrix and embedded positions.
+        Includes beta parameter to emphasize non-zero elements in similarity matrix.
+
+        Parameters
+        ----------
+        norm_rows : bool, optional
+            Whether to norm rows of embedded proximities to 1, by default True
+        beta : Union[float,int], optional
+            Weight given to non-zero elements in similarity matrix
+            Set larger than 1 to give higher weights to similarity ties that exist, by default 2
+        """
+        super(SDNEProximityLoss, self).__init__()
+        
+
+    def forward(self, positions:torch.Tensor, similarity:torch.Tensor, indecies:torch.Tensor):
+        """
+        First order proximity KL Divergence between similarity matrix and embedded positions.
+        Includes beta parameter to emphasize non-zero elements in similarity matrix.
+
+        Parameters
+        positions : Tensor
+            Embedded Positions of size NxK
+        similarity : Tensor
+            Ground Truth Similarity Matrix of dimension NxN
+
+        Returns
+        -------
+        Tensor
+            batch-mean L2 Difference
+
+        """
+
+        distances=sdne_prox_distance(positions)
+        cut_sim=1-similarity[:,indecies] # Creates a new tensor
+        #loss = torch.mul(distances,cut_sim).sum().to(positions.device)
+        #loss2 = torch.abs(torch.mul(1-distances,1-cut_sim)).sum().to(positions.device)
+
+        loss = torch.abs(torch.mul(1-cut_sim,torch.square(distances-cut_sim))).sum().to(positions.device)
 
         return loss
