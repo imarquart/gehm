@@ -112,6 +112,9 @@ class hSDNEAgent(SDNEAgent):
         self.losses_dict = {}
         self.lr_list = []
         self.measures={}
+        self.nodes=None
+        self.positions=None
+        self.est_similarity=None
 
         if self.cuda:
             torch.cuda.manual_seed_all(self.manual_seed)
@@ -177,7 +180,7 @@ class hSDNEAgent(SDNEAgent):
         se_losses = []
         pr_losses = []
         self.model.eval()
-        nodes=[]
+        nodes_list=[]
         position_list=[]
         similarity_list=[]
         with torch.no_grad():
@@ -199,11 +202,17 @@ class hSDNEAgent(SDNEAgent):
                 se_losses.append(se_loss_value.cpu().detach().numpy())
                 pr_losses.append(pr_loss_value.cpu().detach().numpy())
 
-                nodes.append(node_ids.cpu().detach().numpy())
+                nodes_list.append(node_ids.cpu().detach().numpy())
                 position_list.append(positions.cpu().detach().numpy())
                 similarity_list.append(est_sim.cpu().detach().numpy())
 
-        return self.stack_sample(nodes,position_list,similarity_list),losses
+
+        nodes,positions,est_sim = self.stack_sample(nodes_list,position_list,similarity_list)
+        self.nodes=nodes
+        self.positions=positions
+        self.est_similarity = est_sim
+
+        return self.stack_sample(nodes_list,position_list,similarity_list),losses
 
 
     def normalize_and_embed(self):
@@ -212,10 +221,12 @@ class hSDNEAgent(SDNEAgent):
         :return:
         """
         similarity=self.dataset.sim1.numpy()
-        if self.est_similarity is not None and self.positions is not None:
+        if self.est_similarity is not None and self.positions is not None and self.nodes is not None:
             est_similarity=torch.as_tensor(self.est_similarity)
             positions=torch.as_tensor(self.positions)
+            nodes=torch.as_tensor(self.nodes)
         else:
+            logging.info("No positions found in agent, running prediction!")
             predictions,losses = self.predict()
             nodes,positions,est_similarity=predictions
             positions=torch.as_tensor(positions) # just making sure
@@ -229,18 +240,23 @@ class hSDNEAgent(SDNEAgent):
 
         positions=(positions - torch.mean(positions, axis=0)) / torch.std(positions, axis=0)
 
-        for node in nodes:
-            hierarchy = self.hierarchy_dict[int(node)]
-            pos = positions[node,:].unsqueeze(0)
+        node_ids=torch.tensor(list(self.hierarchy_dict.keys()))
+        hierarchy=torch.tensor(list(self.hierarchy_dict.values()))
+
+        for h_level in self.hierarchy_vals:
+            h_nodes=torch.where(hierarchy==h_level)[0]
+            pos = positions[h_nodes,:]
+            if len(pos.shape) <2:
+                pos=pos.unsqueeze(0)
             # TODO Generalize here
-            if hierarchy == 0:
+            if h_level == 0:
                 pos_function = self.model.position
             else:
                 pos_function = self.model.position2
-            if pos_function.dim_orig == positions.shape[1]:
-                positions[node,:] =pos_function(pos)
+            if pos_function.dim_orig == pos.shape[1]:
+                positions[h_nodes,:] =pos_function(pos)
             else:
-                positions[node,:] = old_positions[node,:]
+                positions[h_nodes,:] = old_positions[h_nodes,:]
 
         measure_dict_new=aggregate_measures(positions,est_similarity,similarity)
 
@@ -253,4 +269,4 @@ class hSDNEAgent(SDNEAgent):
         self.positions=positions
 
 
-        return torch.abs(positions-old_positions)
+        return torch.norm(torch.abs(positions-old_positions))

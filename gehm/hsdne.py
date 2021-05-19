@@ -51,7 +51,7 @@ def create_test_data():
     count=0
     hierarchy_dict={}
     for node in G2.nodes():
-        if node in ['Medici','Guadagni','Peruzzi', 'Strozzi' ]:
+        if node in ['Medici','Guadagni' ]:
             hierarchy_dict[node]={"hierarchy": 0}
             count += 1
         else:
@@ -59,10 +59,12 @@ def create_test_data():
     nx.set_node_attributes(G2, hierarchy_dict)
 
     G3=nx.les_miserables_graph()
+    subset=['Valjean','Javert', 'Marius','Gavroche','Fantine','Cosette', 'Eponine', 'Enjolras','MmeThenardier', 'Thenardier','Myriel','Count','Grantaire']
+    G3=nx.subgraph(G3,subset)
     count=0
     hierarchy_dict={}
     for node in G3.nodes():
-        if node in ['Valjean','Cosette','Javert', 'Gavroche', 'Fantine', 'Marius' ]:
+        if node in ['Valjean','Javert','Marius']:
             hierarchy_dict[node]={"hierarchy": 0}
             count += 1
         else:
@@ -75,8 +77,8 @@ def create_test_data():
 hierarchy_attn_matrix=torch.tensor([[1,0.2],[1,1]])
 
 G, G_undir,G2,G3 = create_test_data()
-G = G_undir
-#G=G2
+#G = G_undir
+G=G3
 losses = []
 se_losses = []
 pr_losses = []

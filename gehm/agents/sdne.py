@@ -181,7 +181,7 @@ class SDNEAgent(BaseAgent):
         se_losses = []
         pr_losses = []
         self.model.eval()
-        nodes=[]
+        nodes_list=[]
         position_list=[]
         similarity_list=[]
         with torch.no_grad():
@@ -201,11 +201,17 @@ class SDNEAgent(BaseAgent):
                 se_losses.append(se_loss_value.cpu().detach().numpy())
                 pr_losses.append(pr_loss_value.cpu().detach().numpy())
 
-                nodes.append(node_ids.cpu().detach().numpy())
+                nodes_list.append(node_ids.cpu().detach().numpy())
                 position_list.append(positions.cpu().detach().numpy())
                 similarity_list.append(est_sim.cpu().detach().numpy())
 
-        return self.stack_sample(nodes,position_list,similarity_list),losses
+        nodes,positions,est_sim = self.stack_sample(nodes_list,position_list,similarity_list)
+        self.nodes=nodes
+        self.positions=positions
+        self.est_similarity = est_sim
+
+
+        return self.stack_sample(nodes_list,position_list,similarity_list),losses
 
     def train(self):
         """
@@ -284,9 +290,18 @@ class SDNEAgent(BaseAgent):
             raise ImportError(msg)       
         
         try:       
-            predictions,losses = self.predict()
-            nodes,positions,similarities=predictions
-            asdf=pd.DataFrame(positions, index=nodes, columns=["x","y"])
+            if self.est_similarity is not None and self.positions is not None and self.nodes is not None:
+                est_similarity=torch.as_tensor(self.est_similarity)
+                positions=torch.as_tensor(self.positions)
+                nodes=torch.as_tensor(self.nodes)
+            else:
+                logging.info("No positions found in agent, running prediction!")
+                predictions,losses = self.predict()
+                nodes,positions,est_similarity=predictions
+                positions=torch.as_tensor(positions) # just making sure
+                est_similarity=torch.as_tensor(est_similarity)
+            
+            asdf=pd.DataFrame(positions.numpy(), index=nodes.numpy(), columns=["x","y"])
 
             figure, axes = plt.subplots()
             Drawing_colored_circle = plt.Circle((0, 0), 1, fill=False)

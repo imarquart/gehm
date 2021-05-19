@@ -7,7 +7,7 @@
     "cuda": true,
     "seed": 1337,
   
-    "nr_epochs" : 1000,
+    "nr_epochs" : 1500,
     "schedule_step_size" : 100,
     "schedule_gamma" : 0.9,
     "amsgrad" : false,
