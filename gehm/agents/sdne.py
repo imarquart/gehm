@@ -1,3 +1,5 @@
+import traceback
+
 import torch.nn
 from torch.backends import cudnn
 from torch.utils.data import DataLoader
@@ -11,8 +13,6 @@ from gehm.agents.base import BaseAgent
 from gehm.datasets.nx_datasets import nx_dataset_sdne, nx_dataset_tsne,batch_nx_dataset_tsne
 from gehm.losses.sdne_loss_functions import *
 from gehm.model.sdne import SDNEmodel
-
-# import your classes here
 
 # from tensorboardX import SummaryWriter
 from gehm.utils.measurements import aggregate_measures
@@ -253,6 +253,101 @@ class SDNEAgent(BaseAgent):
 
         pass
 
+    def draw_losses(self):
+        try:
+            import pandas as pd
+            import matplotlib.pyplot as plt
+        except:
+            msg="Could not import pandas and matplotlib!"
+            logging.error(msg)
+            raise ImportError(msg)       
+        try:
+            #lr_list = pd.DataFrame(np.array(agent.lr_list)[1:])
+            #lr_list.plot(title="Learning Rate")
+            #plt.show()
+            for l in self.losses_dict.keys():
+                losses = pd.DataFrame(np.array(self.losses_dict[l])[1:])
+                losses.plot(title=l)
+                plt.show()
+        except:
+            msg="Could not draw losses. Please confirm model has been trained! Exception raised: {}".format(traceback.format_exc())
+            logging.error(msg)
+            raise RuntimeError(msg)
+
+    def draw_embedding(self, node_color_dict:dict=None, node_label_dict:dict=None, xlim:float=None, ylim:float=None):
+        try:
+            import pandas as pd
+            import matplotlib.pyplot as plt
+        except:
+            msg="Could not import pandas and matplotlib!"
+            logging.error(msg)
+            raise ImportError(msg)       
+        
+        try:       
+            predictions,losses = self.predict()
+            nodes,positions,similarities=predictions
+            asdf=pd.DataFrame(positions, index=nodes, columns=["x","y"])
+
+            figure, axes = plt.subplots()
+            Drawing_colored_circle = plt.Circle((0, 0), 1, fill=False)
+
+            if xlim is not None:
+                plt.xlim(-xlim,xlim)
+            if ylim is not None:
+                plt.ylim(-ylim, ylim)
+            plt.scatter(asdf.x, asdf.y)
+            axes.set_aspect(1)
+            asdf["drawn"]=0
+            for ind in asdf.index:
+                row = asdf.loc[ind, :]
+                idx = self.dataset.node_idx_dict[ind]
+                
+                if node_color_dict is not None:
+                    try:
+                        col=node_color_dict[idx]
+                    except:
+                        col="blue"
+                else:
+                    col="blue"
+                if node_color_dict is not None:
+                    try:
+                        node_label=node_label_dict[idx]
+                    except:
+                        node_label=idx
+                else:
+                    node_label=idx
+                                
+                x=row.x
+                y=row.y
+                close_x=np.where(np.isclose(asdf.x,x,atol=0.1))[0]
+                close_y=np.where(np.isclose(asdf.y,y,atol=0.1))[0]
+                closeset=np.intersect1d(close_x,close_y)
+                neighbors=np.sum(asdf.iloc[closeset,:].drawn)+1
+                if neighbors <= 4:
+                    npd=np.array([1,1,2,2])
+                    nn=neighbors%4
+                    xp=np.power(-1,npd[nn-1])*(max(1,neighbors-4))*0.1
+                    yp=np.power(-1,nn)*(max(1,neighbors-4))*0.1
+                    #print("{}: {} - {},{}".format(ind,neighbors,xp,yp))
+                    plt.text(
+                        x=row.x + xp,
+                        y=row.y + yp,
+                        s=node_label,
+                        fontdict=dict(color="black", size=5),
+                        bbox=dict(facecolor=col, alpha=0.3),
+                    )
+                asdf.loc[ind, "drawn"]=1
+
+            axes.add_artist(Drawing_colored_circle)
+            plt.title("Embedding")
+            plt.show()
+
+        except Exception as e:
+            msg="Could not draw losses. Exception raised: {}".format(traceback.format_exc())
+            logging.error(msg)
+            raise RuntimeError(msg)
+
+
     def train_one_epoch(self):
         """
         One epoch of training
@@ -308,7 +403,7 @@ class SDNEAgent(BaseAgent):
 
 
 
-    def finalize(self):
+    def normalize_and_embed(self):
         """
         Finalizes positional embedding by normalizing, reapplying position function and re-measuring deviations.
         :return:

@@ -14,6 +14,7 @@ class nx_hierarchical_dataset(Dataset):
             self,
             G: Union[nx.Graph, nx.DiGraph],
             hierarchy_dict:dict = None, norm_rows: bool = True,
+            hierarchy_attention_matrix:Union[torch.Tensor,np.ndarray]=None
     ):
         self.nodes = np.array(list(G.nodes))
 
@@ -48,6 +49,7 @@ class nx_hierarchical_dataset(Dataset):
         self.hierarchy_dict=hierarchy_dict
         self.hierarchy_vals=np.unique(list(hierarchy_dict.values()))
         self.nr_hierarchies = len(self.hierarchy_vals)
+        self.hierarchy_attention_matrix=hierarchy_attention_matrix
 
 
 
@@ -66,11 +68,15 @@ class nx_hierarchical_dataset(Dataset):
         self.hierarchy = torch.zeros(self.sim1.shape)
         self.hierarchy.requires_grad = False
 
-        for node in self.node_idx:
-            for peer in self.node_idx:
-                if self.hierarchy_dict[int(node)]>=self.hierarchy_dict[int(peer)]:
-                    self.hierarchy[node,peer]=1
-
+        if self.hierarchy_attention_matrix is None:
+            for node in self.node_idx:
+                for peer in self.node_idx:
+                    if self.hierarchy_dict[int(node)]>=self.hierarchy_dict[int(peer)]:
+                        self.hierarchy[node,peer]=1
+        else:
+            for node in self.node_idx:
+                for peer in self.node_idx:
+                    self.hierarchy[node,peer]=self.hierarchy_attention_matrix[self.hierarchy_dict[int(node)],self.hierarchy_dict[int(peer)] ]
         
 
 

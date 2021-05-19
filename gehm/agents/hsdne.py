@@ -24,7 +24,7 @@ cudnn.benchmark = True
 
 
 class hSDNEAgent(SDNEAgent):
-    def __init__(self, config, G: Union[nx.Graph, nx.DiGraph], hierarchy_dict:dict=None):
+    def __init__(self, config, G: Union[nx.Graph, nx.DiGraph], hierarchy_dict:dict=None,hierarchy_attention_matrix:Union[torch.Tensor,np.ndarray]=None):
         super(hSDNEAgent, self).__init__(config, G)
 
 
@@ -57,7 +57,11 @@ class hSDNEAgent(SDNEAgent):
             activation = torch.nn.Tanh
 
         # dataset
-        self.dataset=nx_hierarchical_dataset(G, hierarchy_dict=hierarchy_dict)
+        self.dataset=nx_hierarchical_dataset(G, hierarchy_dict=hierarchy_dict, hierarchy_attention_matrix=hierarchy_attention_matrix)
+        self.hierarchy_attention_matrix=hierarchy_attention_matrix
+        self.hierarchy_dict=self.dataset.hierarchy_dict
+        self.hierarchy_vals=self.dataset.hierarchy_vals
+        self.nr_hierarchies=self.dataset.nr_hierarchies
 
         # define model
         self.model = hSDNEmodel(
@@ -177,7 +181,7 @@ class hSDNEAgent(SDNEAgent):
         position_list=[]
         similarity_list=[]
         with torch.no_grad():
-            pbar = tqdm(enumerate(self.dataloader), desc="Predicting sample", position=0, leave=False)
+            pbar = tqdm(enumerate(self.predict_dataloader), desc="Predicting sample", position=0, leave=False)
             for i, data in pbar:
                 node_ids, hierarchy, attn,sim1, sim2= data
                 node_ids = node_ids.to(self.device)
@@ -200,3 +204,53 @@ class hSDNEAgent(SDNEAgent):
                 similarity_list.append(est_sim.cpu().detach().numpy())
 
         return self.stack_sample(nodes,position_list,similarity_list),losses
+
+
+    def normalize_and_embed(self):
+        """
+        Finalizes positional embedding by normalizing, reapplying position function and re-measuring deviations.
+        :return:
+        """
+        similarity=self.dataset.sim1.numpy()
+        if self.est_similarity is not None and self.positions is not None:
+            est_similarity=torch.as_tensor(self.est_similarity)
+            positions=torch.as_tensor(self.positions)
+        else:
+            predictions,losses = self.predict()
+            nodes,positions,est_similarity=predictions
+            positions=torch.as_tensor(positions) # just making sure
+            est_similarity=torch.as_tensor(est_similarity)
+
+        measure_dict_old=aggregate_measures(positions,est_similarity,similarity)
+
+        logging.info("Normalizing positions with measure {}, re-applying measures".format(self.model.position))
+
+        old_positions=positions.clone()
+
+        positions=(positions - torch.mean(positions, axis=0)) / torch.std(positions, axis=0)
+
+        for node in nodes:
+            hierarchy = self.hierarchy_dict[int(node)]
+            pos = positions[node,:].unsqueeze(0)
+            # TODO Generalize here
+            if hierarchy == 0:
+                pos_function = self.model.position
+            else:
+                pos_function = self.model.position2
+            if pos_function.dim_orig == positions.shape[1]:
+                positions[node,:] =pos_function(pos)
+            else:
+                positions[node,:] = old_positions[node,:]
+
+        measure_dict_new=aggregate_measures(positions,est_similarity,similarity)
+
+        logging.info("Applied embedding position. Measures as follows:")
+        logging.info("emb_map - Old: {}, New: {}".format(measure_dict_old["emb_map"], measure_dict_new["emb_map"]))
+        logging.info("emb_l2 - Old: {}, New: {}".format(measure_dict_old["emb_l2"], measure_dict_new["emb_l2"]))
+        logging.info("emb_5precision - Old: {}, New: {}".format(measure_dict_old["emb_5precision"], measure_dict_new["emb_5precision"]))
+
+
+        self.positions=positions
+
+
+        return torch.abs(positions-old_positions)

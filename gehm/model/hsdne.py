@@ -53,11 +53,12 @@ class hSDNEmodel(torch.nn.Module):
         output=batch
         for i, l in enumerate(self.encoder):
             output=l(output,attn)
+        position=torch.zeros(hierarchy.shape[0], self.dim_embedding)
+        # TODO Generalize here
         position1=self.pos_code1(output[hierarchy==0,:],attn)
         position2=self.pos_code2(output[hierarchy==1,:],attn)
         position1 = self.position(position1)
         position2 = self.position2(position2)
-        position=torch.zeros(hierarchy.shape[0], position1.shape[1])
         position[hierarchy==0,:]=position1
         position[hierarchy==1,:]=position2
         output2 = position.clone()
